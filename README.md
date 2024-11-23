@@ -39,7 +39,7 @@ In the design, the CLA is enhanced with power optimization. The adder is clock-g
 ### verilog
 assign Sum = enable ? (A ^ B ^ C[7:0]) : 8'b0;   // Power gated sum
 assign Cout = enable ? C[8] : 1'b0;  // Power gated carry output
-## 3. Overflow Detection
+### 3. Overflow Detection
 Overflow detection is implemented for both addition and subtraction operations. In signed arithmetic, overflow occurs when the result of an operation exceeds the range that can be represented by the fixed number of bits. For addition, overflow occurs if two operands of the same sign produce a result with a different sign. For subtraction, overflow is detected when the operands' signs differ and the result has an incorrect sign.
 ### 4. Zero Flag
 The zero flag is set when the result of an operation is zero. It is useful for control flow operations in processors, such as conditional branching based on the result of the ALU operation.
