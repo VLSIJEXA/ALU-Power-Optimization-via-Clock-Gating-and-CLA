@@ -2,7 +2,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer: 
-// 
+// JATIN KATIYAR MNIT
 // Create Date: 11/18/2024 08:45:37 AM
 // Design Name: 
 // Module Name: project_1
