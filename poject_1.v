@@ -90,20 +90,19 @@ always @(posedge clk or posedge reset) begin
     end
     else
         if (enable) begin
-        // Perform ALU operation based on ALUOp
         case(ALUOp)
             ADD: begin
                 result = sum;
                 // Detect overflow for addition (signed)
                 temp_overflow = (A[7] == B[7]) && (sum[7] != A[7]);
                 overflow = temp_overflow;
-            end
+                end
             SUB: begin
                 result = A - B;
                 // Detect overflow for subtraction (signed)
                 temp_overflow = (A[7] != B[7]) && (result[7] != A[7]);
                 overflow = temp_overflow;
-            end
+                end
             AND:   result = A & B;   
             OR:    result = A | B;   
             XOR:   result = A ^ B;   
@@ -113,7 +112,7 @@ always @(posedge clk or posedge reset) begin
             default: result = 8'b0;   
         endcase
 
-        // Set the zero flag
+             // Set the zero flag
         zero = (result == 8'b0) ? 1'b1 : 1'b0;
 
     end
