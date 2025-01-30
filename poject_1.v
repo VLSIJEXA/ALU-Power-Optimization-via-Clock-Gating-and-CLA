@@ -19,195 +19,183 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module CLA_Adder (
-    input [7:0] A, B,         
-    input Cin, enable,               
-    output [7:0] Sum,       
-    output Cout );
-    wire [7:0] G, P;      
-    wire [8:0] C;          
+module CLA_Adder_32bit (
+    input [31:0] A, B,
+    input Cin,
+    output [31:0] Sum,
+    output Cout
+);
+    wire [31:0] G, P, C;
 
-    // Generate and Propagate
-    assign G = A & B;      
-    assign P = A ^ B;      
+    
+    assign G = A & B;
+    assign P = A ^ B;
+
+    assign C[0] = Cin;
+    genvar i;
+    generate
+        for (i = 1; i < 32; i = i + 1) begin : carry_gen
+            assign C[i] = G[i-1] | (P[i-1] & C[i-1]);
+        end
+    endgenerate
+    assign Cout = G[31] | (P[31] & C[31]);
 
   
-    assign C[0] = Cin;    
-    assign C[1] = G[0] | (P[0] & C[0]);
-    assign C[2] = G[1] | (P[1] & C[1]);
-    assign C[3] = G[2] | (P[2] & C[2]);
-    assign C[4] = G[3] | (P[3] & C[3]);
-    assign C[5] = G[4] | (P[4] & C[4]);
-    assign C[6] = G[5] | (P[5] & C[5]);
-    assign C[7] = G[6] | (P[6] & C[6]);
-    assign C[8] = G[7] | (P[7] & C[7]); 
-
-   
-    assign Sum = enable ? (P ^ C[7:0]) : 8'b0;   
-
-   
-    assign Cout = enable ? C[8] : 1'b0;  
-
+    assign Sum = P ^ C;
 endmodule
-
-module project_1 (
-    input [7:0] A,         
-    input [7:0] B,          
-    input [2:0] ALUOp,     
-    input clk,             
-    input reset,          
-    input enable,           // Enable signal for clock gating
-    output reg [7:0] result,
-    output reg zero,        
-    output reg overflow     
+module ALU_32bit (
+    input [31:0] A, B,
+    input [2:0] Opcode,
+    input Clk, Enable,
+    output reg [31:0] Result,
+    output reg Cout
 );
-
-
-parameter ADD  = 3'b000; 
-parameter SUB  = 3'b001;
-parameter AND  = 3'b010;
-parameter OR   = 3'b011;
-parameter XOR  = 3'b100;
-parameter CMP  = 3'b101; 
-parameter NAND = 3'b110;
-parameter NOR  = 3'b111;
-
-
-wire [7:0] sum;          
-wire carry_out;          
-reg temp_overflow;      
-
-
-    CLA_Adder cla_adder (.A(A),.B(B), .Cin(1'b0), .Sum(sum)  .Cout(carry_out), .enable(enable) );
-
-// ALU operation logic with clock gating, reset, and overflow detection
-always @(posedge clk or posedge reset) begin
-    if (reset) begin
-        result <= 8'b0;
-        zero <= 1'b0;
-        overflow <= 1'b0;
+    wire [31:0] CLA_Sum;
+    wire CLA_Cout;
+    reg Clk_Gated;
+    reg [31:0] B_comp; 
+    always @(*) begin
+        if (Enable)
+            Clk_Gated = Clk;
+        else
+            Clk_Gated = 0;
     end
-    else
-        if (enable) begin
-        case(ALUOp)
-            ADD: begin
-                result = sum;
-                // Detect overflow for addition (signed)
-                temp_overflow = (A[7] == B[7]) && (sum[7] != A[7]);
-                overflow = temp_overflow;
-                end
-            SUB: begin
-                result = A - B;
-                // Detect overflow for subtraction (signed)
-                temp_overflow = (A[7] != B[7]) && (result[7] != A[7]);
-                overflow = temp_overflow;
-                end
-            AND:   result = A & B;   
-            OR:    result = A | B;   
-            XOR:   result = A ^ B;   
-            CMP:   result = (A == B) ? 8'b1 : 8'b0; 
-            NAND:  result = ~(A & B); 
-            NOR:   result = ~(A | B); 
-            default: result = 8'b0;   
-        endcase
 
-             // Set the zero flag
-        zero = (result == 8'b0) ? 1'b1 : 1'b0;
-
+    
+    always @(*) begin
+        if (Opcode == 3'b001) 
+            B_comp = ~B + 1; 
+        else
+            B_comp = B; 
     end
-end
 
-endmodule
-//////////////////////////////////////////////////////////////////////////////////
-
-
-module testbench;
-
-   
-
-    // Inputs
-    reg [7:0] A;
-    reg [7:0] B;
-    reg [2:0] ALUOp;
-    reg clk;
-    reg reset;
-    reg enable;
-
-    // Outputs
-    wire [7:0] result;
-    wire zero;
-    wire overflow;
-
-    // Instantiate the ALU
-   project_1 uut (
+  
+    CLA_Adder_32bit CLA (
         .A(A),
-        .B(B),
-        .ALUOp(ALUOp),
-        .clk(clk),
-        .reset(reset),
-        .enable(enable),
-        .result(result),
-        .zero(zero),
-        .overflow(overflow)
+        .B(B_comp), 
+        .Cin(Opcode == 3'b001 ? 0 : 0), 
+        .Sum(CLA_Sum),
+        .Cout(CLA_Cout)
     );
 
-    // Clock generation
+   
+    always @(posedge Clk_Gated) begin
+        case (Opcode)
+            3'b000: begin
+                Result = CLA_Sum; 
+                Cout = CLA_Cout;
+            end
+            3'b001: begin
+                if (CLA_Cout == 1'b0) begin
+                    Result = ~CLA_Sum + 1;
+                    Cout = ~CLA_Cout;
+                end
+                else begin
+                    Result = CLA_Sum;
+                    Cout = ~CLA_Cout; 
+                end
+            end
+            3'b010: Result = A & B;          
+            3'b011: Result = A | B;         
+            3'b100: Result = A ^ B;         
+            3'b101: Result = ~A;             
+            default: Result = 32'b0;         
+        endcase
+    end
+endmodule
+///////////////////////////////////////////////////
+//testbench
+   `timescale 1ns / 1ps
+
+module ALU_32bit_tb;
+
+    reg [31:0] A, B;
+    reg [2:0] Opcode;
+    reg Clk, Enable; 
+    wire [31:0] Result;
+    wire Cout;
+
+    
+    ALU_32bit uut (
+        .A(A),
+        .B(B),
+        .Opcode(Opcode),
+        .Clk(Clk),
+        .Enable(Enable),
+        .Result(Result),
+        .Cout(Cout)
+    );
+
+    
     initial begin
-        clk = 0;
-        forever #5 clk = ~clk; // 10ns clock period
+        Clk = 0;
+        forever #5 Clk = ~Clk; 
     end
 
-    // Test sequence
+   
     initial begin
-        // Initialize inputs
-        A = 8'b0;
-        B = 8'b0;
-        ALUOp = 3'b0;
-        reset = 1;
-        enable = 0;
+        
+        Enable = 1;
 
-        // Reset the ALU
-        #10 reset = 0;
-        enable = 1;
+        
+        Opcode = 3'b000;
+        A = 32'h0000_0005;
+        B = 32'h0000_0003;
+        #10; 
+        $display("Addition: A = %h, B = %h, Result = %h, Cout = %b", A, B, Result, Cout);
 
-        // Test ADD operation
-        #10 A = 8'b00000101; // 5
-             B = 8'b00000011; // 3
-             ALUOp = 3'b000; // ADD
-        #10 $display("ADD: A=%d, B=%d, Result=%d, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
+        
+        Opcode = 3'b001;
+        A = 32'h0000_0008;
+        B = 32'h0000_0003;
+        #10;
+        $display("Subtraction: A = %h, B = %h, Result = %h, Cout = %b", A, B, Result, Cout);
 
-        // Test SUB operation
-        #10 ALUOp = 3'b001; // SUB
-        #10 $display("SUB: A=%d, B=%d, Result=%d, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
+        
+        Opcode = 3'b010;
+        A = 32'h0000_00FF;
+        B = 32'h0000_0F0F;
+        #10;
+        $display("AND: A = %h, B = %h, Result = %h", A, B, Result);
 
-        // Test AND operation
-        #10 ALUOp = 3'b010; // AND
-        #10 $display("AND: A=%b, B=%b, Result=%b, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
+        
+        Opcode = 3'b011;
+        A = 32'h0000_00FF;
+        B = 32'h0000_0F0F;
+        #10;
+        $display("OR: A = %h, B = %h, Result = %h", A, B, Result);
 
-        // Test OR operation
-        #10 ALUOp = 3'b011; // OR
-        #10 $display("OR: A=%b, B=%b, Result=%b, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
+        
+        Opcode = 3'b100;
+        A = 32'h0000_00FF;
+        B = 32'h0000_0F0F;
+        #10;
+        $display("XOR: A = %h, B = %h, Result = %h", A, B, Result);
 
-        // Test XOR operation
-        #10 ALUOp = 3'b100; // XOR
-        #10 $display("XOR: A=%b, B=%b, Result=%b, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
+        
+        Opcode = 3'b101;
+        A = 32'h0000_00FF;
+        #10;
+        $display("NOT: A = %h, Result = %h", A, Result);
 
-        // Test CMP operation
-        #10 A = 8'b00000011; // 3
-             B = 8'b00000011; // 3
-             ALUOp = 3'b101; // CMP
-        #10 $display("CMP: A=%d, B=%d, Result=%b, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
+       
+        Enable = 0;
+        Opcode = 3'b000;
+        A = 32'h0000_0005;
+        B = 32'h0000_0003;
+        #10;
+        $display("Disabled ALU: A = %h, B = %h, Result = %h, Cout = %b", A, B, Result, Cout);
 
-        // Test NAND operation
-        #10 ALUOp = 3'b110; // NAND
-        #10 $display("NAND: A=%b, B=%b, Result=%b, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
-
-        // Test NOR operation
-        #10 ALUOp = 3'b111; // NOR
-        #10 $display("NOR: A=%b, B=%b, Result=%b, Zero=%b, Overflow=%b", A, B, result, zero, overflow);
-
-        // Finish simulation
-        #20 $stop;
+        
+        $stop;
     end
 
 endmodule
+  
+
+          
+
+
+
+   
+           
