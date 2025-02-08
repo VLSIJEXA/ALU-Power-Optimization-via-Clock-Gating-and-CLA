@@ -4,6 +4,7 @@ module CLA_Adder_32bit (
  output [31:0] Sum,
  output Cout
 );
+ 
  wire [31:0] G, P; 
  wire [32:0] C;
   assign G = A & B; 
